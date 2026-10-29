@@ -36,6 +36,41 @@ header{padding:22px 0 18px;}
 .brand h1{font-size:19px;margin:0;font-weight:650;letter-spacing:.3px;}
 .brand p{margin:2px 0 0;font-size:12.5px;color:var(--txt-3);}
 
+/* ---------- 标签栏 ---------- */
+.tabs{
+  display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);
+  border-radius:13px;padding:5px;margin:6px 0 16px;position:sticky;top:8px;z-index:20;
+  box-shadow:0 6px 20px rgba(0,0,0,.35);backdrop-filter:blur(8px);
+}
+.tab{
+  flex:1;appearance:none;border:0;background:transparent;color:var(--txt-2);
+  border-radius:9px;padding:10px 8px;font:inherit;font-size:13.5px;font-weight:600;
+  cursor:pointer;transition:background .16s,color .16s;white-space:nowrap;
+}
+.tab:hover{color:var(--txt);}
+.tab.is-active{background:var(--surface-2);color:var(--txt);box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.tab:disabled{opacity:.4;cursor:not-allowed;}
+.panel{display:none;}
+.panel.is-active{display:block;animation:fadeIn .18s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---------- 常驻状态条 ---------- */
+.statusbar{
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:9px 13px 8px;margin-bottom:10px;
+}
+.sb-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2);}
+.sb-dot{width:7px;height:7px;border-radius:50%;background:var(--txt-3);flex:none;}
+.sb-dot.on{background:var(--ok);}
+.sb-dot.busy{background:var(--warn);animation:pulse 1.5s infinite;}
+.sb-dot.err{background:var(--err);}
+.sb-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sb-pct{font-variant-numeric:tabular-nums;font-weight:650;color:var(--txt);}
+.sb-track{height:4px;background:#0a0d12;border-radius:99px;margin-top:7px;overflow:hidden;}
+.sb-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--brand),#7fb0ff);transition:width .2s;}
+.sb-fill.ok{background:linear-gradient(90deg,var(--ok),#63e0b0);}
+.sb-fill.err{background:linear-gradient(90deg,var(--err),#ff8f8f);}
+
 /* ---------- 卡片 ---------- */
 .card{
   background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
@@ -220,6 +255,23 @@ footer a:hover{color:var(--brand-2);}
     </div>
   </header>
 
+  <div class="statusbar" id="statusbar" hidden>
+    <div class="sb-row">
+      <span class="sb-dot" id="sb-dot"></span>
+      <span class="sb-text" id="sb-text">就绪</span>
+      <span class="sb-pct" id="sb-pct"></span>
+    </div>
+    <div class="sb-track"><div class="sb-fill" id="sb-fill"></div></div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab is-active" data-tab="flash" onclick="Tabs.go('flash')">刷写固件</button>
+    <button class="tab" data-tab="settings" onclick="Tabs.go('settings')">设备设置</button>
+    <button class="tab" data-tab="log" onclick="Tabs.go('log')">运行日志</button>
+  </nav>
+
+  <!-- ===== 面板：刷写 ===== -->
+  <div class="panel is-active" id="panel-flash">
   <!-- 1 连接 -->
   <section class="card" id="card-connect">
     <div class="card-head">
@@ -248,7 +300,11 @@ footer a:hover{color:var(--brand-2);}
     </div>
   </section>
 
-  <!-- 3 设备设置 -->
+  </div><!-- /panel-flash -->
+
+  <!-- ===== 面板：设置 ===== -->
+  <div class="panel" id="panel-settings">
+  <!-- 设备设置 -->
   <section class="card" id="card-settings" hidden>
     <div class="card-head">
       <div class="step">3</div>
@@ -426,7 +482,7 @@ footer a:hover{color:var(--brand-2);}
     </div>
   </section>
 
-  <!-- 5 刷写 -->
+  <!-- 4 刷写 -->
   <section class="card" id="card-flash">
     <div class="card-head">
       <div class="step">5</div>
@@ -448,17 +504,6 @@ footer a:hover{color:var(--brand-2);}
     </div>
   </section>
 
-  <!-- 5 日志 -->
-  <section class="card" id="card-log">
-    <div class="card-head">
-      <div class="step">·</div>
-      <h2>运行日志</h2>
-      <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12.5px" onclick="uiClearLog()">清空</button>
-    </div>
-    <div class="log" id="log"></div>
-  </section>
-
-  <!-- 高级 -->
   <section class="card">
     <details class="adv">
       <summary>高级设置</summary>
@@ -488,6 +533,24 @@ footer a:hover{color:var(--brand-2);}
       </div>
     </details>
   </section>
+  </div><!-- /panel-settings -->
+
+  <!-- ===== 面板：日志 ===== -->
+  <div class="panel" id="panel-log">
+  <!-- 日志 -->
+  <section class="card" id="card-log">
+    <div class="card-head">
+      <div class="step">·</div>
+      <h2>运行日志</h2>
+      <button class="btn btn-ghost" style="margin-left:auto;padding:6px 12px;font-size:12.5px" onclick="uiClearLog()">清空</button>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <!-- 高级 -->
+
+
+  </div><!-- /panel-log -->
 
   <footer>
     基于 <a href="https://github.com/pvvx/ATC_MiThermometer" target="_blank" rel="noopener">pvvx/ATC_MiThermometer</a> ·
@@ -676,6 +739,8 @@ async function uiConnect(){
     $('card-settings').hidden = false;
     await Settings.load();
     await Settings.loadComfort();
+    /* 连接成功后自动切到「设备设置」，日志里也留一句提示 */
+    Tabs.go('settings');
   } catch (e){
     UI.setBadge('连接失败', 'err');
     log('连接失败：' + (e.message || e), 'err');
@@ -1177,6 +1242,8 @@ async function uiStartFlash(){
     UI.updateFlashButton();
     UI.progressClass('err');
     UI.progress(State.blockCount ? State.lastBlock / State.blockCount * 100 : 0, '刷写失败');
+    $('sb-dot').className = 'sb-dot err';
+    $('sb-fill').className = 'sb-fill err';
     log('刷写失败：' + (e.message || e), 'err');
   }
 }
@@ -1254,6 +1321,25 @@ function uiFactoryReset(){
   otaSend('DE').then(() => log('已发送恢复指令', 'ok'))
                   .catch(e => log('恢复失败：' + e, 'err'));
 }
+
+/* ------------------------- 8. 标签页 ------------------------- */
+const Tabs = {
+  cur: 'flash',
+  go(name){
+    document.querySelectorAll('.panel').forEach(el => {
+      el.classList.toggle('is-active', el.id === 'panel-' + name);
+    });
+    document.querySelectorAll('.tab').forEach(el => {
+      el.classList.toggle('is-active', el.dataset.tab === name);
+    });
+    this.cur = name;
+    // 切到设置页时，如果还没连接给出提示
+    if (name === 'settings' && !State.server){
+      log('请先在「刷写固件」页连接设备', 'warn');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+};
 
 /* ------------------------- 8. 初始化 ------------------------- */
 /* 误差计算器实时更新 */
