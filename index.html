@@ -212,6 +212,7 @@ function disconnect() {
 
 var otaInProgress = false;	// true between startDFU and the final status
 var otaResumeTrys = 0;
+var otaPendingResume = 0;	// block to continue from after a drop (0 = none)
 
 function onDisconnected() {
 	addLog('Disconnected.');
@@ -219,30 +220,19 @@ function onDisconnected() {
 	$("ldfile").hidden = true;
 	cfg.hver = null;
 	hwver_id = null;
-	/* If the link dropped in the middle of an upload, reconnect and continue from the last
-	 * block the device acknowledged instead of asking the user to start over. */
-	if (otaInProgress && otaResumeBlock > 0 && otaResumeTrys < 6) {
-		otaResumeTrys++;
-		addLog('Upload interrupted at block ' + otaResumeBlock + ' - resuming (' + otaResumeTrys + '/6)');
-		setStatus('Reconnecting to resume upload...');
-		setTimeout(function() {
-			bluetoothDevice.gatt.connect().then(function(server) {
-				gattServer = server;
-				return gattServer.getPrimaryServices();
-			}).then(function(services) {
-				for (var i = 0; i < services.length; i++)
-					if (services[i].uuid == "00010203-0405-0607-0809-0a0b0c0d1912") Theservice = services[i];
-				return Theservice.getCharacteristic('00010203-0405-0607-0809-0a0b0c0d2b12');
-			}).then(function(chr) {
-				writeCharacteristic = chr;
-				addLog('Resumed at block ' + otaResumeBlock);
-				setTimeout(function() { sendOTAblock(otaResumeBlock); }, 300);
-			}).catch(function(err) {
-				addLog('Resume failed: ' + err);
-				otaInProgress = false;
-				updateFail(err);
-			});
-		}, 800);
+	/* The device stops advertising while it is in OTA mode and may even have rebooted, so the
+	 * old GATT handle is dead: calling bluetoothDevice.gatt.connect() again cannot work. What
+	 * we CAN do is remember how far the upload got and continue from there as soon as the user
+	 * gets a fresh connection (the browser must re-pick the device). The device keeps the
+	 * sectors it already received, so resuming at otaResumeBlock is safe. */
+	if (otaInProgress && otaResumeBlock > 0) {
+		otaPendingResume = otaResumeBlock;
+		addLog('Upload interrupted at block ' + otaResumeBlock + '/' + blockCount +
+			' - click Connect again and pick the device; the upload will continue from there.');
+		setStatus('Upload interrupted at ' + Math.floor(otaResumeBlock / (blockCount || 1) * 100) +
+			'%. Press Connect and select the device to continue.');
+		otaInProgress = false;
+		resetVariables();
 		return;
 	}
 	resetVariables();
@@ -2414,6 +2404,19 @@ function doConnect() {
 	}).then(characteristic => {
 		addClog("Found Telink OTA write characteristic");
 		writeCharacteristic = characteristic;
+
+		/* A previous upload was interrupted: continue from the first missing block. */
+		if (otaPendingResume > 0 && otaPendingResume < blockCount) {
+			var from = otaPendingResume;
+			otaPendingResume = 0;
+			otaInProgress = true;
+			otaResumeTrys = 0;
+			addLog('Resuming interrupted upload at block ' + from + '/' + blockCount);
+			setStatus('Resuming upload at block ' + from + '...');
+			startTime = new Date().getTime();
+			setTimeout(function() { sendOTAblock(from); }, 400);
+			return;
+		}
 
 	    getDevVersion(devInfEnabled).then(_ => {
 		if (devinfo.hrstr) addLog('Hardware Revision String: ' + devinfo.hrstr);
