@@ -302,6 +302,10 @@ footer a:hover{color:var(--brand-2);}
     <!-- 显示 -->
     <div class="group">
       <div class="group-title">屏幕显示<span class="group-sub">决定屏幕上显示什么</span></div>
+      <div class="switch-row" style="border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:12px;margin-bottom:4px">
+        <span class="lbl"><b style="color:var(--txt)">时钟模式</b><em>总开关。关闭后不再显示时钟轮播，只显示温湿度</em></span>
+        <label class="switch"><input type="checkbox" id="sw-clock" checked onchange="Settings.onClockToggle()"><span class="track"></span><span class="knob"></span></label>
+      </div>
       <div class="switch-row">
         <span class="lbl">显示温湿度屏<em>关闭后只轮播时间/日期</em></span>
         <label class="switch"><input type="checkbox" id="sw-th" onchange="Settings.markDirty()"><span class="track"></span><span class="knob"></span></label>
@@ -831,10 +835,19 @@ const Settings = {
       this.setRowEnabled('sw-th', false);   // 官方没有这个功能
       this.setRowEnabled('sw-sec', false);  // 官方没有秒屏
     }
+    /* flg bit3 (0x08) = show_time_smile / "show clock": 时钟总开关，官方与定制一致 */
+    $('sw-clock').checked = !!(c.flg & 0x08);
     $('sw-batt').checked = !!(c.flg & 0x02);
     $('sw-c').checked    = !(c.flg & 0x10);
     $('inp-adv').value   = Math.round(c.adv * 62.5);
     $('inp-meas').value  = c.meas;
+
+    /* 时钟总开关关闭时，日期屏/秒屏没有意义，一并置灰 */
+    const clockOn = $('sw-clock').checked;
+    if (!clockOn){
+      this.setRowEnabled('sw-date', false);
+      this.setRowEnabled('sw-sec', false);
+    }
 
     this.dirty = false;
     $('btn-savecfg').disabled = true;
@@ -862,6 +875,19 @@ const Settings = {
     log('固件类型已设为：' + (this.isCustom ? '本项目定制固件' : '官方原版固件'));
   },
 
+  onClockToggle(){
+    this.markDirty();
+    const on = $('sw-clock').checked;
+    if (!on){
+      this.setRowEnabled('sw-date', false);
+      this.setRowEnabled('sw-sec', false);
+    } else {
+      // 恢复：日期屏对两种固件都有效；秒屏只有定制固件支持
+      this.setRowEnabled('sw-date', true);
+      this.setRowEnabled('sw-sec', !!this.isCustom);
+    }
+  },
+
   markDirty(){
     this.dirty = true;
     $('btn-savecfg').disabled = false;
@@ -885,6 +911,7 @@ const Settings = {
       }
       b[off + 3] = flg3;
       let flg = b[off + 1];
+      flg = $('sw-clock').checked ? (flg | 0x08) : (flg & ~0x08);   // 时钟总开关
       flg = $('sw-batt').checked ? (flg | 0x02) : (flg & ~0x02);
       flg = $('sw-c').checked ? (flg & ~0x10) : (flg | 0x10);
       b[off + 1] = flg;
