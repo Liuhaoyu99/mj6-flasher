@@ -170,6 +170,31 @@ details.adv .adv-body{padding:0 15px 15px;border-top:1px solid var(--line);}
 .switch input:checked ~ .track{background:rgba(61,126,255,.32);border-color:rgba(61,126,255,.55);}
 .switch input:checked ~ .knob{transform:translateX(19px);background:var(--brand-2);}
 
+/* ---------- 设置面板 ---------- */
+.group{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:4px 14px 12px;margin-bottom:12px;}
+.group-title{
+  display:flex;align-items:baseline;gap:8px;font-size:13px;font-weight:650;color:var(--txt);
+  padding:12px 0 6px;letter-spacing:.3px;
+}
+.group-title .group-sub{font-size:11.5px;font-weight:400;color:var(--txt-3);}
+.field{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-top:1px solid rgba(255,255,255,.045);}
+.field:first-of-type{border-top:0;}
+.field.sub{padding-left:0;}
+.field-label{font-size:13.5px;color:var(--txt-2);min-width:0;}
+.field-label b{display:block;font-size:13.5px;font-weight:600;color:var(--txt);}
+.field-label span{display:block;font-size:11.5px;color:var(--txt-3);margin-top:2px;line-height:1.5;}
+.field-ctl{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+.num{
+  width:104px;background:#0a0d12;border:1px solid var(--line);color:var(--txt);
+  border-radius:9px;padding:9px 11px;font-size:13.5px;font-family:inherit;text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.num.sm{width:76px;}
+.num:focus{outline:none;border-color:var(--accent,var(--brand));}
+.unit{font-size:12px;color:var(--txt-3);flex:none;}
+.btn-sm{padding:8px 13px;font-size:13px;border-radius:9px;}
+.calc-out{font-size:12.5px;color:#7ef0bf;font-variant-numeric:tabular-nums;min-width:96px;text-align:right;}
+.lbl em{display:block;font-style:normal;font-size:11.5px;color:var(--txt-3);margin-top:1px;}
 /* ---------- 底部 ---------- */
 footer{padding:26px 0 10px;text-align:center;font-size:12px;color:var(--txt-3);}
 footer a{color:var(--txt-2);text-decoration:none;}
@@ -223,10 +248,99 @@ footer a:hover{color:var(--brand-2);}
     </div>
   </section>
 
-  <!-- 3 选择固件 -->
-  <section class="card" id="card-file">
+  <!-- 3 设备设置 -->
+  <section class="card" id="card-settings" hidden>
     <div class="card-head">
       <div class="step">3</div>
+      <h2>设备设置</h2>
+      <span class="badge" id="cfg-badge" style="margin-left:auto"><span class="dot"></span><span id="cfg-state">未读取</span></span>
+    </div>
+
+    <!-- 时间校准 -->
+    <div class="group">
+      <div class="group-title">时间校准<span class="group-sub">让表走得准</span></div>
+      <div class="field">
+        <div class="field-label"><b>设置时间</b><span>把设备时钟对齐到当前时间</span></div>
+        <button class="btn btn-sm" id="btn-settime" onclick="Settings.syncTime()">立即对时</button>
+      </div>
+      <div class="field">
+        <div class="field-label"><b>走时微调</b><span>单位：0.01 秒/天，正数=走快需减速，负数=走慢需加速</span></div>
+        <div class="field-ctl">
+          <input class="num" id="inp-trim" type="number" min="-5000" max="5000" step="1" value="0" placeholder="0">
+          <button class="btn btn-sm" onclick="Settings.applyTrim()">下发</button>
+          <button class="btn btn-sm btn-ghost" onclick="Settings.autoTrim()" title="根据你输入的偏差自动计算">自动计算</button>
+        </div>
+      </div>
+      <div class="field sub">
+        <div class="field-label"><span>误差计算器：观察 N 天，累计快/慢 M 秒</span></div>
+        <div class="field-ctl">
+          <input class="num sm" id="calc-days" type="number" min="1" step="1" value="30" placeholder="天">
+          <span class="unit">天</span>
+          <input class="num sm" id="calc-drift" type="number" step="0.1" value="-42" placeholder="秒">
+          <span class="unit">秒（正=快）</span>
+          <span class="calc-out" id="calc-out">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 显示 -->
+    <div class="group">
+      <div class="group-title">屏幕显示<span class="group-sub">决定屏幕上显示什么</span></div>
+      <div class="switch-row">
+        <span class="lbl">显示温湿度屏<em>关闭后只轮播时间/日期</em></span>
+        <label class="switch"><input type="checkbox" id="sw-th" onchange="Settings.markDirty()"><span class="track"></span><span class="knob"></span></label>
+      </div>
+      <div class="switch-row">
+        <span class="lbl">显示日期屏<em>月日 + 星期</em></span>
+        <label class="switch"><input type="checkbox" id="sw-date" checked onchange="Settings.markDirty()"><span class="track"></span><span class="knob"></span></label>
+      </div>
+      <div class="switch-row">
+        <span class="lbl">显示秒屏<em>独立一屏，只显示两位秒数</em></span>
+        <label class="switch"><input type="checkbox" id="sw-sec" checked onchange="Settings.markDirty()"><span class="track"></span><span class="knob"></span></label>
+      </div>
+      <div class="switch-row">
+        <span class="lbl">显示电量屏</span>
+        <label class="switch"><input type="checkbox" id="sw-batt" onchange="Settings.markDirty()"><span class="track"></span><span class="knob"></span></label>
+      </div>
+      <div class="switch-row">
+        <span class="lbl">摄氏度（关闭为华氏度）</span>
+        <label class="switch"><input type="checkbox" id="sw-c" checked onchange="Settings.markDirty()"><span class="track"></span><span class="knob"></span></label>
+      </div>
+    </div>
+
+    <!-- 广播与测量 -->
+    <div class="group">
+      <div class="group-title">广播与测量<span class="group-sub">影响耗电与上报频率</span></div>
+      <div class="field">
+        <div class="field-label"><b>广播间隔</b><span>越小上报越快，耗电越高</span></div>
+        <div class="field-ctl">
+          <input class="num" id="inp-adv" type="number" min="100" max="10000" step="100" value="5000" placeholder="毫秒">
+          <span class="unit">毫秒</span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label"><b>测量间隔倍数</b><span>测量周期 = 广播间隔 × 倍数</span></div>
+        <div class="field-ctl">
+          <input class="num" id="inp-meas" type="number" min="1" max="255" step="1" value="4" placeholder="倍">
+          <span class="unit">倍</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn btn-primary btn-block" id="btn-savecfg" onclick="Settings.save()" disabled>保存设置到设备</button>
+      <button class="btn btn-ghost btn-block" onclick="Settings.load()">重新读取</button>
+    </div>
+    <div class="note" style="margin-top:12px">
+      <span class="icon">i</span>
+      <span>设置通过 BLE 命令直接写入设备，不需要刷固件。部分选项需要固件 v17 以上支持。</span>
+    </div>
+  </section>
+
+  <!-- 4 选择固件 -->
+  <section class="card" id="card-file">
+    <div class="card-head">
+      <div class="step">4</div>
       <h2>选择固件</h2>
     </div>
     <div class="file-picker" id="file-picker">
@@ -240,10 +354,10 @@ footer a:hover{color:var(--brand-2);}
     </div>
   </section>
 
-  <!-- 4 刷写 -->
+  <!-- 5 刷写 -->
   <section class="card" id="card-flash">
     <div class="card-head">
-      <div class="step">4</div>
+      <div class="step">5</div>
       <h2>刷写固件</h2>
     </div>
     <div class="progress-wrap">
@@ -312,7 +426,7 @@ const OTA_SVC_UUID   = '00010203-0405-0607-0809-0a0b0c0d1912';
 const OTA_CHR_UUID   = '00010203-0405-0607-0809-0a0b0c0d2b12';
 const MAX_OTA_SIZE   = 0x20000;      // 128 KB
 const BLOCK_SIZE     = 32;           // 每块 32 字节
-const STATUS_EVERY   = 32;           // 每 32 块回读一次状态（1 KB）
+const STATUS_EVERY   = 8;            // 每 8 块回读一次状态（256 B），与上游一致
 
 const State = {
   device: null,
@@ -475,6 +589,8 @@ async function uiConnect(){
     UI.connected(device.name);
     log('连接成功', 'ok');
     await Info.load();
+    $('card-settings').hidden = false;
+    await Settings.load();
   } catch (e){
     UI.setBadge('连接失败', 'err');
     log('连接失败：' + (e.message || e), 'err');
@@ -562,17 +678,198 @@ function uiSetFirmware(name, data){
   log('固件：' + name + '，' + data.length + ' 字节，共 ' + State.blockCount + ' 块');
 }
 
+/* ------------------------- 7. 设备设置 ------------------------- */
+/* 协议：0x55 读取整份 cfg；0x57 写回。字段顺序见固件 src/app.h 的 cfg_t。 */
+const CMD_CFG = 0x55, CMD_CFG_SET = 0x57, CMD_TIME = 0x23, CMD_TRIM = 0x76;
+const SET_SVC_UUID = '00001f10-0000-1000-8000-00805f9b34fb';
+const SET_CHR_UUID = '00001f1f-0000-1000-8000-00805f9b34fb';
+
+const Settings = {
+  raw: null,
+  dirty: false,
+  char: null,
+
+  async getChar(){
+    if (this.char) return this.char;
+    const svc = await State.server.getPrimaryService(SET_SVC_UUID);
+    this.char = await svc.getCharacteristic(SET_CHR_UUID);
+    return this.char;
+  },
+
+  async send(bytes){
+    const ch = await this.getChar();
+    const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    await ch.writeValue(buf);
+  },
+
+  /* 发命令并等待一次 notify 应答（0x55 是读，必须用 notify 收） */
+  async request(bytes, timeoutMs){
+    const ch = await this.getChar();
+    const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    return new Promise(async (resolve, reject) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        try { ch.removeEventListener('characteristicvaluechanged', onVal); } catch(_) {}
+        reject(new Error('等待设备回应超时'));
+      }, timeoutMs || 3000);
+      const onVal = (ev) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { ch.removeEventListener('characteristicvaluechanged', onVal); } catch(_) {}
+        resolve(ev.target.value);
+      };
+      ch.addEventListener('characteristicvaluechanged', onVal);
+      try {
+        await ch.startNotifications();
+        await ch.writeValue(buf);
+      } catch (e) {
+        clearTimeout(timer);
+        if (!done) { done = true; reject(e); }
+      }
+    });
+  },
+
+  async load(){
+    try {
+      log('正在读取设备配置…');
+      const dv = await this.request([CMD_CFG]);
+      this.parse(dv);
+      this.applyToUI();
+      $('cfg-state').textContent = '已读取';
+      $('cfg-badge').className = 'badge on';
+      log('配置读取成功', 'ok');
+    } catch (e) {
+      $('cfg-state').textContent = '读取失败';
+      $('cfg-badge').className = 'badge err';
+      log('读取配置失败：' + (e.message || e), 'err');
+    }
+  },
+
+  /* cfg 数据布局（0x55 应答，跳过第 1 字节命令回显）：
+     [0]=ver [1]=flg [2]=flg2 [3]=temp_offset/flg3 [4]=humi_offset/event_adv_cnt
+     [5]=adv_interval [6]=measure_interval [7]=rf_tx [8]=connect_latency ... */
+  parse(dv){
+    const b = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+    this.raw = b;
+    const off = 1;                       // 跳过命令回显
+    const flg3 = b[off + 3];             // flg3 字节（MJ6: bit4 show_th / bit5 hide_date / bit7 hide_sec）
+    const flg  = b[off + 1];
+    this.cfg = {
+      ver:  b[off + 0],
+      flg3: flg3,
+      flg:  flg,
+      adv:  b[off + 5],
+      meas: b[off + 6]
+    };
+    log('固件版本 v' + ((this.cfg.ver >> 4) & 0x0F) + '.' + (this.cfg.ver & 0x0F) +
+        '，flg3=0x' + flg3.toString(16).padStart(2,'0'));
+  },
+
+  applyToUI(){
+    const c = this.cfg; if (!c) return;
+    $('card-settings').hidden = false;
+    // flg3: bit4 show_th(1=显示) / bit5 hide_date(1=隐藏) / bit7 hide_sec(1=隐藏)
+    $('sw-th').checked   = !!(c.flg3 & 0x10);
+    $('sw-date').checked = !(c.flg3 & 0x20);
+    $('sw-sec').checked  = !(c.flg3 & 0x80);
+    $('sw-batt').checked = !!(c.flg & 0x02);      // flg.show_batt_enabled
+    $('sw-c').checked    = !(c.flg & 0x10);       // flg.temp_F_or_C 取反
+    $('inp-adv').value   = (c.adv * 62.5) | 0;
+    $('inp-meas').value  = c.meas;
+    this.dirty = false;
+    $('btn-savecfg').disabled = true;
+  },
+
+  markDirty(){
+    this.dirty = true;
+    $('btn-savecfg').disabled = false;
+  },
+
+  /* 写回：0x57 + 完整 cfg 字节（保持未修改字段原值） */
+  async save(){
+    if (!this.raw) { log('请先读取配置', 'err'); return; }
+    try {
+      const b = new Uint8Array(this.raw);       // 原样复制，只改需要的位
+      const off = 1;
+      let flg3 = b[off + 3];
+      flg3 = $('sw-th').checked ? (flg3 | 0x10) : (flg3 & ~0x10);
+      flg3 = $('sw-date').checked ? (flg3 & ~0x20) : (flg3 | 0x20);
+      flg3 = $('sw-sec').checked ? (flg3 & ~0x80) : (flg3 | 0x80);
+      b[off + 3] = flg3;
+      let flg = b[off + 1];
+      flg = $('sw-batt').checked ? (flg | 0x02) : (flg & ~0x02);
+      flg = $('sw-c').checked ? (flg & ~0x10) : (flg | 0x10);
+      b[off + 1] = flg;
+      const advMs = parseInt($('inp-adv').value, 10);
+      b[off + 5] = Math.max(1, Math.min(160, Math.round(advMs / 62.5)));
+      b[off + 6] = Math.max(1, Math.min(255, parseInt($('inp-meas').value, 10) || 4));
+
+      const payload = new Uint8Array(1 + (b.length - 1));
+      payload[0] = CMD_CFG_SET;
+      payload.set(b.subarray(1), 1);
+
+      log('正在写入设置…');
+      await this.send(payload);
+      log('设置已写入设备', 'ok');
+      this.dirty = false;
+      $('btn-savecfg').disabled = true;
+      setTimeout(() => this.load(), 800);
+    } catch (e) {
+      log('写入失败：' + (e.message || e), 'err');
+    }
+  },
+
+  async syncTime(){
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const b = new Uint8Array(5);
+      b[0] = CMD_TIME;
+      b[1] = now & 0xFF; b[2] = (now >> 8) & 0xFF;
+      b[3] = (now >> 16) & 0xFF; b[4] = (now >> 24) & 0xFF;
+      log('正在对时…');
+      await this.send(b);
+      log('对时成功', 'ok');
+    } catch (e) { log('对时失败：' + (e.message || e), 'err'); }
+  },
+
+  async applyTrim(){
+    const v = parseInt($('inp-trim').value, 10) || 0;
+    if (v < -5000 || v > 5000) { log('微调范围 -5000 ~ 5000', 'err'); return; }
+    try {
+      const b = new Uint8Array(3);
+      b[0] = CMD_TRIM;
+      b[1] = v & 0xFF; b[2] = (v >> 8) & 0xFF;
+      log('正在下发走时微调 ' + v + ' …');
+      await this.send(b);
+      log('微调已下发（' + (v/100).toFixed(2) + ' 秒/天）', 'ok');
+    } catch (e) { log('下发失败：' + (e.message || e), 'err'); }
+  },
+
+  autoTrim(){
+    const days = parseFloat($('calc-days').value) || 0;
+    const drift = parseFloat($('calc-drift').value) || 0;
+    if (days <= 0) { log('观察天数必须大于 0', 'err'); return; }
+    const perDay = drift / days;
+    const cs = Math.round(perDay * 100);
+    $('inp-trim').value = Math.max(-5000, Math.min(5000, cs));
+    $('calc-out').textContent = '→ ' + (cs/100).toFixed(2) + ' 秒/天';
+    log('计算：' + days + ' 天累计 ' + drift + ' 秒 → ' + cs + '（0.01 秒/天）');
+  }
+};
+
 /* ------------------------- 7. 刷写核心 ------------------------- */
+/* 传输节奏：必须使用带应答的 writeValue。
+ * writeValueWithoutResponse 不会等待射频发送完成，串行 await 并不能起到限流作用，
+ * 短时间内会把 BLE 发送缓冲打满并直接掉线（表现为刷到 1% 就中断）。
+ * 带应答写每包都要等设备回 ATT 确认，天然形成流控。 */
 async function otaSend(hex){
   const payload = hexToBytes(hex);
   const ch = State.otaChar;
   if (!ch) throw new Error('未连接');
-  try {
-    if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(payload);
-    else await ch.writeValue(payload);
-  } catch(e){
-    await ch.writeValue(payload);   // 回退到带确认写
-  }
+  await ch.writeValue(payload);
 }
 
 function makeBlock(n){
@@ -625,7 +922,14 @@ async function flashBlock(n){
     const sec = ((Date.now() - State.startTime) / 1000).toFixed(1);
     UI.progress(pct, '已发送 ' + n + ' / ' + State.blockCount + ' 块 · ' + sec + ' 秒');
   }
-  await otaSend(makeBlock(n));
+  const hexBlock = makeBlock(n);
+  try {
+    await otaSend(hexBlock);
+  } catch (e) {
+    /* 单块传输偶发失败：稍等后重试一次，失败才真正中断 */
+    await new Promise(r => setTimeout(r, 60));
+    await otaSend(hexBlock);
+  }
 
   if ((n + 1) % STATUS_EVERY === 0){
     const v = await State.otaChar.readValue();
@@ -637,7 +941,8 @@ async function flashBlock(n){
       }
     }
   }
-  setTimeout(() => flashBlock(n + 1), 0);
+  /* 让出主线程，给 BLE 协议栈处理发送队列的时间 */
+  setTimeout(() => flashBlock(n + 1), 4);
 }
 
 async function finishFlash(){
@@ -674,6 +979,15 @@ function uiFactoryReset(){
 }
 
 /* ------------------------- 8. 初始化 ------------------------- */
+/* 误差计算器实时更新 */
+document.addEventListener('input', (e) => {
+  if (e.target && (e.target.id === 'calc-days' || e.target.id === 'calc-drift')){
+    const d = parseFloat($('calc-days').value) || 0;
+    const v = parseFloat($('calc-drift').value) || 0;
+    if (d > 0) $('calc-out').textContent = '→ ' + (Math.round(v / d * 100) / 100).toFixed(2) + ' 秒/天';
+  }
+});
+
 window.addEventListener('load', () => {
   log('页面已就绪，请点击「搜索并连接」开始');
   if (!navigator.bluetooth){
