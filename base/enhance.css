@@ -1,0 +1,233 @@
+/* ===================================================================
+   MJ6 增强样式 —— 保留 pvvx 原版的浅色观感，只做排版与移动端优化
+   原则：
+   1. 不改变配色体系（原版是浅色，就保持浅色）
+   2. 只调整间距、字号、触控尺寸、换行
+   3. 手机端不出现横向滚动
+   =================================================================== */
+
+:root {
+  --mj-bg: #ffffff;
+  --mj-panel: #f7f8fa;
+  --mj-line: #e3e6ec;
+  --mj-text: #1f2430;
+  --mj-dim: #6b7280;
+  --mj-brand: #2563eb;
+  --mj-brand-soft: #eff4ff;
+  --mj-ok: #16a34a;
+  --mj-warn: #d97706;
+  --mj-err: #dc2626;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 14px 16px 48px;
+  color: var(--mj-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  background: var(--mj-bg);
+}
+
+/* 标题 */
+h1 {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: .2px;
+  margin: 4px 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--mj-line);
+}
+h1::after {
+  content: " · MJWSD06MMC";
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--mj-dim);
+}
+h2, h3 { font-size: 16px; font-weight: 600; margin: 18px 0 8px; }
+b { font-weight: 600; }
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--mj-line);
+  margin: 16px 0;
+}
+
+a { color: var(--mj-brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* 原版那个汉堡菜单在手机上没意义，直接隐藏 */
+.navbar { display: none !important; }
+
+/* ---------- 表单控件 ---------- */
+input[type="text"],
+input[type="number"],
+input[type="file"],
+input:not([type]),
+select {
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--mj-text);
+  background: #fff;
+  border: 1px solid var(--mj-line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  max-width: 100%;
+  transition: border-color .15s, box-shadow .15s;
+}
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--mj-brand);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: var(--mj-brand);
+  vertical-align: -2px;
+}
+input[size] { min-width: 70px; }
+
+/* ---------- 按钮 ---------- */
+button {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mj-text);
+  background: #fff;
+  border: 1px solid var(--mj-line);
+  border-radius: 8px;
+  padding: 7px 14px;
+  margin: 3px 4px 3px 0;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+button:hover { background: var(--mj-brand-soft); border-color: #c7d7ff; }
+button:active { transform: scale(.98); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 首屏那两个主按钮给点视觉重量 */
+body > div > button[onclick*="connect()"],
+button[onclick*="startDFU"] {
+  background: var(--mj-brand);
+  border-color: var(--mj-brand);
+  color: #fff;
+  font-weight: 550;
+}
+body > div > button[onclick*="connect()"]:hover,
+button[onclick*="startDFU"]:hover { background: #1d4ed8; }
+
+/* ---------- 状态与日志 ---------- */
+#percent {
+  background: var(--mj-panel);
+  border: 1px solid var(--mj-line);
+  border-left: 3px solid var(--mj-brand);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin: 12px 0;
+  font-size: 14px;
+  min-height: 20px;
+}
+#percent:empty { display: none; }
+
+#MAC, #tempHumiData {
+  font-size: 13px;
+  color: var(--mj-dim);
+  letter-spacing: .2px;
+}
+
+#log {
+  background: #fbfcfd;
+  border: 1px solid var(--mj-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #334155;
+}
+
+/* ---------- 配置区 ---------- */
+#custcfg {
+  background: var(--mj-panel);
+  border: 1px solid var(--mj-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 14px 0;
+  line-height: 2;
+}
+#custcfg:empty { display: none; }
+#custcfg b {
+  display: block;
+  margin: 12px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--mj-line);
+  font-size: 14px;
+}
+#ldfile {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--mj-panel);
+  border: 1px dashed var(--mj-line);
+  border-radius: 10px;
+}
+
+/* ============================ 手机端 ============================ */
+@media (max-width: 700px) {
+  body {
+    padding: 10px 12px calc(32px + env(safe-area-inset-bottom));
+    font-size: 14.5px;
+  }
+  h1 { font-size: 17px; }
+  h1::after { display: block; font-size: 12.5px; margin-top: 2px; }
+
+  /* 触控目标 ≥ 42px */
+  button {
+    padding: 10px 14px;
+    font-size: 14.5px;
+    min-height: 42px;
+    margin: 4px 5px 4px 0;
+  }
+
+  /* iOS 聚焦 <16px 的输入框会强制放大整页 */
+  input[type="text"],
+  input[type="number"],
+  input:not([type]),
+  select {
+    font-size: 16px;
+    padding: 9px 11px;
+    min-width: 0;
+    width: auto;
+  }
+  /* 原版有大量 size="5"/"8" 的窄框，手机上太窄 */
+  input[size] { width: 82px !important; min-width: 0 !important; }
+
+  /* 配置区换行更宽松，避免长标签把控件挤出屏幕 */
+  #custcfg { padding: 10px 11px; line-height: 2.1; }
+  #custcfg br { display: block; margin: 3px 0; }
+
+  #log { max-height: 46vh; font-size: 12px; }
+  #percent { font-size: 13px; }
+}
+
+@media (max-width: 380px) {
+  body { padding: 8px 10px calc(28px + env(safe-area-inset-bottom)); }
+  button { padding: 9px 12px; font-size: 14px; }
+  input[size] { width: 70px !important; }
+  h1 { font-size: 16px; }
+}
+
+/* 横屏手机：压缩纵向留白 */
+@media (max-height: 480px) and (orientation: landscape) {
+  body { padding-top: 8px; }
+  h1 { font-size: 16px; margin-bottom: 8px; }
+  hr { margin: 10px 0; }
+}
