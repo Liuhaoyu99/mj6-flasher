@@ -226,12 +226,16 @@ function onDisconnected() {
 	 * gets a fresh connection (the browser must re-pick the device). The device keeps the
 	 * sectors it already received, so resuming at otaResumeBlock is safe. */
 	if (otaInProgress && otaResumeBlock > 0) {
-		otaPendingResume = otaResumeBlock;
+		/* The Telink OTA protocol requires one continuous transfer: the staging area is
+		 * invalidated when the link drops, so a partial upload can never be continued.
+		 * Restarting from block 0 is the only correct behaviour. */
 		addLog('Upload interrupted at block ' + otaResumeBlock + '/' + blockCount +
-			' - click Connect again and pick the device; the upload will continue from there.');
-		setStatus('Upload interrupted at ' + Math.floor(otaResumeBlock / (blockCount || 1) * 100) +
-			'%. Press Connect and select the device to continue.');
+			' (' + Math.floor(otaResumeBlock / (blockCount || 1) * 100) + '%).');
+		setStatus('Upload interrupted at ' +
+			Math.floor(otaResumeBlock / (blockCount || 1) * 100) +
+			'%. Reconnect and flash again - the transfer cannot be resumed mid-way.');
 		otaInProgress = false;
+		otaPendingResume = 0;
 		resetVariables();
 		return;
 	}
@@ -3043,7 +3047,10 @@ function sendOTAblock(blockNr) {
 	otaCharSend(blockString + blockCRC).then(function(character) {
 		otaResumeBlock = blockNr + 1;
 		setTimeout(function() {
-			if ((blockNr + 1) % 8 == 0) {
+			/* Status read-back is a full round-trip; doing it every 8 blocks (256 B) is the
+			 * main throughput bottleneck. Every 32 blocks (1 KiB) still detects a bad write
+			 * long before the images diverge. */
+			if ((blockNr + 1) % 32 == 0) {
 				writeCharacteristic.readValue().then(function(result) {
 					if(result.byteLength > 0) {
 						let e = result.getUint8(0);
