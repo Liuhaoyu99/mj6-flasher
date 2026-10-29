@@ -5,6 +5,75 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="IAN5KFh8Zic4luOhlAc9SP">
 <title>Telink Flasher v14.1</title>
 <script type="text/javascript" src="./core.js"></script>
+
+<style id="mj6-ui-polish">
+/* ===== MJ6 flasher UI polish (styles only - no behaviour change) ===== */
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+  --txt:#e6e9ef; --dim:#98a2b3; --accent:#4f8cff; --ok:#31c48d; --warn:#f0b429; --err:#f05252;
+}
+html,body{background:var(--bg);color:var(--txt);}
+body{
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",Roboto,sans-serif;
+  max-width:920px;margin:0 auto;padding:0 18px 80px;
+}
+h1{
+  font-size:26px;font-weight:650;letter-spacing:.2px;
+  margin:26px 0 6px;padding-bottom:14px;border-bottom:1px solid var(--line);
+}
+h1::after{content:" · MJWSD06MMC";color:var(--dim);font-size:15px;font-weight:400;}
+/* hide the old hamburger menu, keep links reachable but tidy */
+.navbar .menu-items{display:none;}
+.navbar .hamburger-lines{display:none;}
+.navbar .checkbox{display:none;}
+.navbar{min-height:0;padding:0;}
+hr{border:0;border-top:1px solid var(--line);margin:22px 0;}
+button{
+  background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+  border-radius:9px;padding:9px 16px;font-size:14px;font-weight:500;
+  cursor:pointer;transition:.15s ease;margin:4px 6px 4px 0;
+}
+button:hover{background:#262c38;border-color:#3a4250;}
+button:active{transform:translateY(1px);}
+button[onclick*="connect()"]{background:var(--accent);border-color:var(--accent);color:#fff;}
+button[onclick*="connect()"]:hover{background:#3d7bf0;}
+input[type=text],input[type=file]{
+  background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+  border-radius:9px;padding:9px 12px;font-size:14px;min-width:210px;
+}
+input[type=text]:focus{outline:none;border-color:var(--accent);}
+#percent{
+  background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:10px;padding:12px 16px;margin:16px 0;font-size:14px;
+}
+#percent:empty{display:none;}
+#MAC{color:var(--dim);font-size:13px;letter-spacing:.3px;}
+#log{
+  background:#0b0d11;border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;margin-top:12px;max-height:340px;overflow:auto;
+  font:12.5px/1.75 ui-monospace,SFMono-Regular,Consolas,monospace;
+  color:#b9c2d0;white-space:pre-wrap;
+}
+#custcfg{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin:14px 0;}
+#custcfg:empty{display:none;}
+#ldfile{margin:14px 0;padding:14px;background:var(--panel);border:1px dashed var(--line);border-radius:10px;}
+label{color:var(--dim);font-size:14px;}
+input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;vertical-align:-3px;}
+/* progress bar injected by the polish script */
+#mj6-progress{
+  height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;
+  margin:10px 0 4px;border:1px solid var(--line);
+}
+#mj6-progress > i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#7aa7ff);
+  border-radius:99px;transition:width .18s ease;}
+#mj6-progress.done > i{background:linear-gradient(90deg,var(--ok),#63d9a9);}
+#mj6-progress.fail > i{background:linear-gradient(90deg,var(--err),#ff8a8a);}
+@media (max-width:600px){
+  body{padding:0 12px 60px;}
+  h1{font-size:21px;} h1::after{display:block;margin-top:4px;}
+  button{padding:11px 16px;font-size:15px;} input[type=text]{min-width:0;width:100%;}
+}
+</style>
 </head>
 <body data-page-node-id="UmpgenlBCmykXL3kDv2BcE">
 <script>
@@ -4274,4 +4343,42 @@ function SendCustomConfig() {
   <button type="button" onclick="clearLog();" data-page-node-id="wp7pjvgI6SB1Eev4PS8lmx">Clear Log</button>
   <div id="log" data-page-node-id="vKFgO2j2el1OEK4WZ8vubM"></div>
 
+
+<script id="mj6-progress-hook">
+/* Mirror the existing status text into a progress bar. Read-only observer:
+   it does not touch the flashing logic, it only re-renders #percent. */
+(function(){
+  function ensure(){
+    var pct = document.getElementById('percent');
+    if(!pct) return null;
+    var bar = document.getElementById('mj6-progress');
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = 'mj6-progress';
+      bar.innerHTML = '<i></i>';
+      pct.parentNode.insertBefore(bar, pct.nextSibling);
+    }
+    return bar;
+  }
+  function parse(txt){
+    var m = txt.match(/(\d+(?:\.\d+)?)\s*%/);
+    return m ? Math.max(0, Math.min(100, parseFloat(m[1]))) : null;
+  }
+  var mo = new MutationObserver(function(){
+    var bar = ensure(); if(!bar) return;
+    var pct = document.getElementById('percent');
+    var txt = pct ? pct.textContent : '';
+    var v = parse(txt);
+    var fill = bar.querySelector('i');
+    if(v !== null){ fill.style.width = v + '%'; }
+    bar.classList.toggle('done', /done|success|ok\b/i.test(txt) && v !== null);
+    bar.classList.toggle('fail', /error|fail|disconnect/i.test(txt));
+  });
+  window.addEventListener('load', function(){
+    var pct = document.getElementById('percent');
+    if(pct) mo.observe(pct, {childList:true, characterData:true, subtree:true});
+    ensure();
+  });
+})();
+</script>
 </body></html>
