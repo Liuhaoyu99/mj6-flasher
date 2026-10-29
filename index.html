@@ -399,6 +399,17 @@ footer a:hover{color:var(--brand-2);}
           <span class="lbl">刷写后自动断开</span>
           <label class="switch"><input type="checkbox" id="opt-autodis" checked><span class="track"></span><span class="knob"></span></label>
         </div>
+        <div class="switch-row" style="border-top:1px solid rgba(255,255,255,.045);margin-top:6px">
+          <span class="lbl">刷写速度<em>连接不稳定时选慢速</em></span>
+          <div class="field-ctl">
+            <select id="opt-speed" class="num" style="width:120px" onchange="uiSpeed(this.value)">
+              <option value="50">慢速（50ms）</option>
+              <option value="30">较慢（30ms）</option>
+              <option value="20" selected>标准（20ms）</option>
+              <option value="10">快速（10ms）</option>
+            </select>
+          </div>
+        </div>
         <div style="margin-top:12px">
           <button class="btn btn-danger btn-block" onclick="uiFactoryReset()">恢复设备出厂设置</button>
         </div>
@@ -438,6 +449,7 @@ const State = {
   busy: false,
   flashing: false,
   lastBlock: 0,
+  sendGap: 20,          // 块间延迟（毫秒），见 flashBlock 注释
   startTime: 0
 };
 
@@ -861,15 +873,18 @@ const Settings = {
 };
 
 /* ------------------------- 7. 刷写核心 ------------------------- */
-/* 传输节奏：必须使用带应答的 writeValue。
- * writeValueWithoutResponse 不会等待射频发送完成，串行 await 并不能起到限流作用，
- * 短时间内会把 BLE 发送缓冲打满并直接掉线（表现为刷到 1% 就中断）。
- * 带应答写每包都要等设备回 ATT 确认，天然形成流控。 */
+/* OTA 特征（app_att.c:490）只声明了 READ | WRITE_WITHOUT_RSP，没有 WRITE(0x08)。
+ * Chrome 对没有 WRITE 属性的特征调用 writeValue() 会抛 NotSupportedError，
+ * 这就是之前"0% 中断"的原因。这里优先用 writeValueWithoutResponse，
+ * 只有它不存在时才退回 writeValue。真正的限流由 sendGap 控制。 */
 async function otaSend(hex){
   const payload = hexToBytes(hex);
   const ch = State.otaChar;
   if (!ch) throw new Error('未连接');
-  await ch.writeValue(payload);
+  if (typeof ch.writeValueWithoutResponse === 'function')
+    await ch.writeValueWithoutResponse(payload);
+  else
+    await ch.writeValue(payload);
 }
 
 function makeBlock(n){
@@ -941,8 +956,10 @@ async function flashBlock(n){
       }
     }
   }
-  /* 让出主线程，给 BLE 协议栈处理发送队列的时间 */
-  setTimeout(() => flashBlock(n + 1), 4);
+  /* 每块之间留出一个连接间隔（设备默认 20 ms）。
+   * write-without-response 不会等待射频发送，间隔太短会把发送缓冲打满并掉线；
+   * 20 ms 是这台上报/连接参数下的安全值，单块 34 字节约 1.7 KB/s。 */
+  setTimeout(() => flashBlock(n + 1), State.sendGap);
 }
 
 async function finishFlash(){
@@ -968,6 +985,11 @@ async function finishWithError(code){
   UI.progress(State.lastBlock / State.blockCount * 100, '出错');
   const msg = OTA_ERRORS[code] || ('未知错误 ' + code);
   log('设备回报错误：' + msg, 'err');
+}
+
+function uiSpeed(v){
+  State.sendGap = parseInt(v, 10) || 20;
+  log('刷写间隔已设为 ' + State.sendGap + ' ms');
 }
 
 function uiFactoryReset(){
