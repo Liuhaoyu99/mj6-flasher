@@ -256,6 +256,22 @@ footer a:hover{color:var(--brand-2);}
       <span class="badge" id="cfg-badge" style="margin-left:auto"><span class="dot"></span><span id="cfg-state">未读取</span></span>
     </div>
 
+    <div class="note" style="margin-bottom:12px">
+      <span class="icon">i</span>
+      <span>固件类型：<b id="fw-kind">读取中…</b><br>
+      不同固件的配置位含义不同，选错会写坏配置。官方原版不支持秒屏/温湿度屏开关，这些项会自动禁用。</span>
+    </div>
+    <div class="field" style="border-top:0;padding-top:0">
+      <div class="field-label"><b>固件类型</b><span>自动判定不准时可手动指定</span></div>
+      <div class="field-ctl">
+        <select id="sel-fwtype" class="num" style="width:190px" onchange="Settings.setFwType(this.value)">
+          <option value="auto" selected>自动判定</option>
+          <option value="custom">本项目定制固件</option>
+          <option value="official">官方原版固件</option>
+        </select>
+      </div>
+    </div>
+
     <!-- 时间校准 -->
     <div class="group">
       <div class="group-title">时间校准<span class="group-sub">让表走得准</span></div>
@@ -761,38 +777,89 @@ const Settings = {
   },
 
   /* cfg 数据布局（0x55 应答，跳过第 1 字节命令回显）：
-     [0]=ver [1]=flg [2]=flg2 [3]=temp_offset/flg3 [4]=humi_offset/event_adv_cnt
-     [5]=adv_interval [6]=measure_interval [7]=rf_tx [8]=connect_latency ... */
+     [0]=ver [1]=flg [2]=flg2 [3]=flg3(原 temp_offset 位置) [4]=event_adv_cnt/humi_offset
+     [5]=adv_interval [6]=measure_interval [7]=rf_tx [8]=connect_latency ...
+     注意：flg3 的位含义随固件不同而不同（见 parseFlg3）。 */
   parse(dv){
     const b = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
     this.raw = b;
-    const off = 1;                       // 跳过命令回显
-    const flg3 = b[off + 3];             // flg3 字节（MJ6: bit4 show_th / bit5 hide_date / bit7 hide_sec）
+    const off = 1;
+    const ver  = b[off + 0];
     const flg  = b[off + 1];
-    this.cfg = {
-      ver:  b[off + 0],
-      flg3: flg3,
-      flg:  flg,
-      adv:  b[off + 5],
-      meas: b[off + 6]
-    };
-    log('固件版本 v' + ((this.cfg.ver >> 4) & 0x0F) + '.' + (this.cfg.ver & 0x0F) +
-        '，flg3=0x' + flg3.toString(16).padStart(2,'0'));
+    const flg3 = b[off + 3];
+    /* 判断是不是本项目定制固件：定制版把 bit4 用作 show_th，
+       官方原版 bit4 是 reserved 且恒为 0。再加上版本号做二次确认。 */
+    if (this.fwTypeChoice === 'custom') this.isCustom = true;
+    else if (this.fwTypeChoice === 'official') this.isCustom = false;
+    else this.isCustom = this.detectCustom(ver, flg3, b);
+    this.cfg = { ver, flg, flg3, adv: b[off+5], meas: b[off+6] };
+    log('固件 v' + ((ver>>4)&0x0F) + '.' + (ver&0x0F) +
+        ' · ' + (this.isCustom ? '本项目定制版' : '官方原版/其他固件') +
+        ' · flg3=0x' + flg3.toString(16).padStart(2,'0'));
+  },
+
+  /* 定制固件的判定：本项目的 MJ6 固件会响应 0x75/0x78 这类扩展命令，
+     但读取阶段拿不到应答，所以先用「bit4 是否为 1」做启发式判断，
+     再由用户在界面上手动纠正（显示一个提示条）。 */
+  detectCustom(ver, flg3, b){
+    // bit4=1 只可能出现在定制固件里（官方 reserved 恒 0）
+    if (flg3 & 0x10) return true;
+    // 版本号相同的情况下无法区分，保守默认按官方处理更安全
+    return false;
   },
 
   applyToUI(){
     const c = this.cfg; if (!c) return;
     $('card-settings').hidden = false;
-    // flg3: bit4 show_th(1=显示) / bit5 hide_date(1=隐藏) / bit7 hide_sec(1=隐藏)
-    $('sw-th').checked   = !!(c.flg3 & 0x10);
-    $('sw-date').checked = !(c.flg3 & 0x20);
-    $('sw-sec').checked  = !(c.flg3 & 0x80);
-    $('sw-batt').checked = !!(c.flg & 0x02);      // flg.show_batt_enabled
-    $('sw-c').checked    = !(c.flg & 0x10);       // flg.temp_F_or_C 取反
-    $('inp-adv').value   = (c.adv * 62.5) | 0;
+
+    const rate = $('fw-kind');
+    if (rate) rate.textContent = this.isCustom ? '本项目定制固件' : '官方原版（部分选项不可用）';
+    $('cfg-badge').className = 'badge ' + (this.isCustom ? 'on' : 'busy');
+
+    if (this.isCustom){
+      // 定制布局：bit4 显示T/H（1=显示） / bit5 隐藏日期 / bit7 隐藏秒
+      $('sw-th').checked   = !!(c.flg3 & 0x10);
+      $('sw-date').checked = !(c.flg3 & 0x20);
+      $('sw-sec').checked  = !(c.flg3 & 0x80);
+      this.setRowEnabled('sw-th', true);
+      this.setRowEnabled('sw-sec', true);
+    } else {
+      // 官方布局：bit4 reserved(恒0) / bit5 隐藏日期 / bit6 月日格式 / bit7 隐藏星期
+      $('sw-th').checked   = false;
+      $('sw-date').checked = !(c.flg3 & 0x20);
+      $('sw-sec').checked  = false;
+      this.setRowEnabled('sw-th', false);   // 官方没有这个功能
+      this.setRowEnabled('sw-sec', false);  // 官方没有秒屏
+    }
+    $('sw-batt').checked = !!(c.flg & 0x02);
+    $('sw-c').checked    = !(c.flg & 0x10);
+    $('inp-adv').value   = Math.round(c.adv * 62.5);
     $('inp-meas').value  = c.meas;
+
     this.dirty = false;
     $('btn-savecfg').disabled = true;
+  },
+
+  setRowEnabled(id, on){
+    const el = $(id);
+    if (!el) return;
+    el.disabled = !on;
+    const row = el.closest('.switch-row');
+    if (row){
+      row.style.opacity = on ? '1' : '.42';
+      row.title = on ? '' : '该固件不支持此选项';
+    }
+  },
+
+  fwTypeChoice: 'auto',
+
+  setFwType(v){
+    this.fwTypeChoice = v;
+    if (v === 'custom') this.isCustom = true;
+    else if (v === 'official') this.isCustom = false;
+    else if (this.cfg) this.isCustom = this.detectCustom(this.cfg.ver, this.cfg.flg3, this.raw);
+    if (this.cfg) this.applyToUI();
+    log('固件类型已设为：' + (this.isCustom ? '本项目定制固件' : '官方原版固件'));
   },
 
   markDirty(){
@@ -807,9 +874,15 @@ const Settings = {
       const b = new Uint8Array(this.raw);       // 原样复制，只改需要的位
       const off = 1;
       let flg3 = b[off + 3];
-      flg3 = $('sw-th').checked ? (flg3 | 0x10) : (flg3 & ~0x10);
-      flg3 = $('sw-date').checked ? (flg3 & ~0x20) : (flg3 | 0x20);
-      flg3 = $('sw-sec').checked ? (flg3 & ~0x80) : (flg3 | 0x80);
+      if (this.isCustom){
+        /* 定制固件布局：只动 bit4 / bit5 / bit7 */
+        flg3 = $('sw-th').checked ? (flg3 | 0x10) : (flg3 & ~0x10);
+        flg3 = $('sw-date').checked ? (flg3 & ~0x20) : (flg3 | 0x20);
+        flg3 = $('sw-sec').checked ? (flg3 & ~0x80) : (flg3 | 0x80);
+      } else {
+        /* 官方固件布局：只动 bit5（隐藏日期），bit6/bit7 是别的含义，绝不能碰 */
+        flg3 = $('sw-date').checked ? (flg3 & ~0x20) : (flg3 | 0x20);
+      }
       b[off + 3] = flg3;
       let flg = b[off + 1];
       flg = $('sw-batt').checked ? (flg | 0x02) : (flg & ~0x02);
