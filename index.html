@@ -328,7 +328,59 @@ footer a:hover{color:var(--brand-2);}
       </div>
     </div>
 
-    <!-- 广播与测量 -->
+    <!-- 舒适区间 -->
+    <div class="group">
+      <div class="group-title">舒适区间<span class="group-sub">决定表情与舒适度判定</span></div>
+      <div class="field">
+        <div class="field-label"><b>温度范围</b><span>低于下限或高于上限判为不舒适</span></div>
+        <div class="field-ctl">
+          <input class="num sm" id="inp-tlo" type="number" step="0.1" value="21.0"><span class="unit">°C</span>
+          <span class="unit">~</span>
+          <input class="num sm" id="inp-thi" type="number" step="0.1" value="26.0"><span class="unit">°C</span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label"><b>湿度范围</b><span>同上，超出区间同样判为不舒适</span></div>
+        <div class="field-ctl">
+          <input class="num sm" id="inp-hlo" type="number" step="1" value="30"><span class="unit">%</span>
+          <span class="unit">~</span>
+          <input class="num sm" id="inp-hhi" type="number" step="1" value="60"><span class="unit">%</span>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-sm" onclick="Settings.saveComfort()">下发舒适区间</button>
+        <button class="btn btn-sm btn-ghost" onclick="Settings.loadComfort()">读取</button>
+      </div>
+    </div>
+
+    <!-- 校准与广播 -->    <!-- 广播与测量 -->
+    <!-- 校准与标识 -->
+    <div class="group">
+      <div class="group-title">校准与标识<span class="group-sub">修正读数偏差、修改广播名</span></div>
+      <div class="field">
+        <div class="field-label"><b>温度偏移</b><span>读数加这个值，用于修正系统误差</span></div>
+        <div class="field-ctl">
+          <input class="num sm" id="inp-toff" type="number" step="0.1" value="0"><span class="unit">°C</span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label"><b>湿度偏移</b><span>同上</span></div>
+        <div class="field-ctl">
+          <input class="num sm" id="inp-hoff" type="number" step="0.1" value="0"><span class="unit">%</span>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-sm" onclick="Settings.saveOffsets()">下发偏移</button>
+      </div>
+      <div class="field" style="margin-top:6px">
+        <div class="field-label"><b>设备名称</b><span>蓝牙广播显示的名字，改完设备会重启</span></div>
+        <div class="field-ctl">
+          <input class="num" id="inp-name" type="text" style="text-align:left;width:150px" placeholder="ATC_xxxxxx">
+          <button class="btn btn-sm" onclick="Settings.saveName()">改名</button>
+        </div>
+      </div>
+    </div>
+
     <div class="group">
       <div class="group-title">广播与测量<span class="group-sub">影响耗电与上报频率</span></div>
       <div class="field">
@@ -623,6 +675,7 @@ async function uiConnect(){
     await Info.load();
     $('card-settings').hidden = false;
     await Settings.load();
+    await Settings.loadComfort();
   } catch (e){
     UI.setBadge('连接失败', 'err');
     log('连接失败：' + (e.message || e), 'err');
@@ -766,6 +819,13 @@ const Settings = {
 
   async load(){
     try {
+      log('正在识别固件类型…');
+      if (this.fwTypeChoice === 'auto'){
+        this.probedCustom = await this.probeCustom();
+      } else {
+        this.probedCustom = (this.fwTypeChoice === 'custom');
+      }
+      $('fw-kind').textContent = this.probedCustom ? '本项目定制固件' : '官方原版固件';
       log('正在读取设备配置…');
       const dv = await this.request([CMD_CFG]);
       this.parse(dv);
@@ -795,21 +855,49 @@ const Settings = {
        官方原版 bit4 是 reserved 且恒为 0。再加上版本号做二次确认。 */
     if (this.fwTypeChoice === 'custom') this.isCustom = true;
     else if (this.fwTypeChoice === 'official') this.isCustom = false;
-    else this.isCustom = this.detectCustom(ver, flg3, b);
+    else this.isCustom = this.probedCustom;   // 由 probeCustom() 在读取前确定
     this.cfg = { ver, flg, flg3, adv: b[off+5], meas: b[off+6] };
     log('固件 v' + ((ver>>4)&0x0F) + '.' + (ver&0x0F) +
         ' · ' + (this.isCustom ? '本项目定制版' : '官方原版/其他固件') +
         ' · flg3=0x' + flg3.toString(16).padStart(2,'0'));
   },
 
-  /* 定制固件的判定：本项目的 MJ6 固件会响应 0x75/0x78 这类扩展命令，
-     但读取阶段拿不到应答，所以先用「bit4 是否为 1」做启发式判断，
-     再由用户在界面上手动纠正（显示一个提示条）。 */
-  detectCustom(ver, flg3, b){
-    // bit4=1 只可能出现在定制固件里（官方 reserved 恒 0）
-    if (flg3 & 0x10) return true;
-    // 版本号相同的情况下无法区分，保守默认按官方处理更安全
-    return false;
+  /* 定制固件的确定性判定：主动探测扩展命令 0x79。
+   * 官方固件的命令表只到 0x73，对 0x79 不会应答；
+   * 本项目固件会回 4 字节时间 + 1 字节冷启动标志（共 5 字节）。
+   * 这个判断不依赖任何配置位，因此不会误判。 */
+  async probeCustom(){
+    try {
+      const ch = await this.getChar();
+      const dv = await new Promise(async (resolve, reject) => {
+        let done = false;
+        const timer = setTimeout(() => {
+          if (done) return; done = true;
+          try { ch.removeEventListener('characteristicvaluechanged', onVal); } catch(_){}
+          reject(new Error('无应答'));
+        }, 1200);
+        const onVal = (ev) => {
+          if (done) return; done = true;
+          clearTimeout(timer);
+          try { ch.removeEventListener('characteristicvaluechanged', onVal); } catch(_){}
+          resolve(ev.target.value);
+        };
+        ch.addEventListener('characteristicvaluechanged', onVal);
+        try {
+          await ch.startNotifications();
+          await ch.writeValue(new Uint8Array([0x79]));
+        } catch(e) { clearTimeout(timer); if(!done){done=true; reject(e);} }
+      });
+      // 定制固件应答：cmd 回显 + 4 字节时间 + 1 字节 cold_boot
+      if (dv && dv.byteLength >= 5){
+        log('探测成功：设备响应扩展命令 0x79（定制固件）');
+        return true;
+      }
+      return false;
+    } catch (e){
+      log('探测扩展命令无应答 → 判定为官方原版固件');
+      return false;
+    }
   },
 
   applyToUI(){
@@ -865,6 +953,7 @@ const Settings = {
   },
 
   fwTypeChoice: 'auto',
+  probedCustom: false,
 
   setFwType(v){
     this.fwTypeChoice = v;
@@ -932,6 +1021,72 @@ const Settings = {
     } catch (e) {
       log('写入失败：' + (e.message || e), 'err');
     }
+  },
+
+  /* 舒适区间：0x20 命令，cmf 结构 = {t_lo, t_hi, h_lo, h_hi} 各 int16 小端，单位 x0.01 */
+  async loadComfort(){
+    try {
+      log('正在读取舒适区间…');
+      const dv = await this.request([0x20]);
+      const b = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+      if (b.length >= 9){
+        const r = (i) => (b[1 + i*2] | (b[2 + i*2] << 8));
+        const tlo = (r(0) | 0) / 100, thi = (r(1) | 0) / 100;
+        const hlo = (r(2) | 0) / 100, hhi = (r(3) | 0) / 100;
+        if (tlo > -100 && thi < 200 && thi > tlo){
+          $('inp-tlo').value = tlo.toFixed(1);
+          $('inp-thi').value = thi.toFixed(1);
+          $('inp-hlo').value = hlo.toFixed(0);
+          $('inp-hhi').value = hhi.toFixed(0);
+        }
+        log('舒适区间：' + tlo + '~' + thi + '°C，' + hlo + '~' + hhi + '%', 'ok');
+      }
+    } catch(e){ log('读取舒适区间失败：' + (e.message || e), 'err'); }
+  },
+
+  async saveComfort(){
+    try {
+      const tlo = Math.round(parseFloat($('inp-tlo').value) * 100);
+      const thi = Math.round(parseFloat($('inp-thi').value) * 100);
+      const hlo = Math.round(parseFloat($('inp-hlo').value) * 100);
+      const hhi = Math.round(parseFloat($('inp-hhi').value) * 100);
+      if (!(thi > tlo) || !(hhi > hlo)){ log('上限必须大于下限', 'err'); return; }
+      const cmd = new Uint8Array(9);
+      cmd[0] = 0x20;
+      const put = (o, v) => { cmd[o] = v & 0xFF; cmd[o+1] = (v >> 8) & 0xFF; };
+      put(1, tlo); put(3, thi); put(5, hlo); put(7, hhi);
+      await this.send(cmd);
+      log('舒适区间已下发', 'ok');
+    } catch(e){ log('下发失败：' + (e.message || e), 'err'); }
+  },
+
+  /* 温湿度偏移：0x25 sensor cfg，coef[0..1] 为 s16 x0.01（温度），coef[2..3] 为湿度 */
+  async saveOffsets(){
+    try {
+      const t = Math.round(parseFloat($('inp-toff').value) * 100) || 0;
+      const h = Math.round(parseFloat($('inp-hoff').value) * 100) || 0;
+      const cmd = new Uint8Array(5);
+      cmd[0] = 0x25;
+      cmd[1] = t & 0xFF; cmd[2] = (t >> 8) & 0xFF;
+      cmd[3] = h & 0xFF; cmd[4] = (h >> 8) & 0xFF;
+      await this.send(cmd);
+      log('温湿度偏移已下发：温度 ' + (t/100) + ' °C，湿度 ' + (h/100) + ' %', 'ok');
+    } catch(e){ log('下发失败：' + (e.message || e), 'err'); }
+  },
+
+  /* 设备名：0x01 + 名称字节（不含结尾 0） */
+  async saveName(){
+    const nm = ($('inp-name').value || '').trim();
+    if (!nm){ log('名称不能为空', 'err'); return; }
+    if (nm.length > 20){ log('名称最多 20 个字符', 'err'); return; }
+    try {
+      const bytes = new TextEncoder().encode(nm);
+      const cmd = new Uint8Array(1 + bytes.length);
+      cmd[0] = 0x01;
+      cmd.set(bytes, 1);
+      await this.send(cmd);
+      log('设备名已改为「' + nm + '」，设备将重启', 'ok');
+    } catch(e){ log('改名失败：' + (e.message || e), 'err'); }
   },
 
   async syncTime(){
